@@ -1,0 +1,19 @@
+# === ENVIRONMENT FILES ===
+.env
+.env.*
+*.env
+
+# === VIRTUAL ENV ===
+.venv/
+venv/
+
+# === PYTHON CACHE ===
+__pycache__/
+*.pyc
+
+# === VECTOR DB / GENERATED DATA ===
+data/cache/
+data/embeddings/
+
+output/
+*chroma.sqlite3

@@ -1,0 +1,53 @@
+# ================================
+# Model Configuration
+# ================================
+
+default_provider: gemini
+
+# --------------------------------
+# Agent → Model routing
+# --------------------------------
+routing:
+  scope_agent: gemini_flash_lite
+  supervisor_agent: gemini_flash
+  research_agent: gemini_flash
+  final_reporter: gemini_flash
+  summarizer: gemini_flash
+
+# --------------------------------
+# Model definitions
+# --------------------------------
+models:
+
+  # Lightweight model for scoping, clarification, planning
+  gemini_flash_lite:
+    provider: gemini
+    model: gemini-2.5-flash-lite
+    temperature: 0.0
+    max_tokens: 512
+    timeout: 10
+    retries: 1
+    supports_tools: false
+    supports_structured_output: true
+
+  # Main research + reasoning model
+  gemini_flash:
+    provider: gemini
+    model: gemini-2.5-flash
+    temperature: 0.0
+    max_tokens: null        # null → Python None
+    timeout: 30
+    retries: 2
+    supports_tools: true
+    supports_structured_output: true
+
+  # Optional fallback (only used if enabled)
+  openai_optional:
+    provider: openai
+    model: gpt-4o-mini
+    temperature: 0.3
+    max_tokens: 2048
+    timeout: 30
+    retries: 2
+    supports_tools: true
+    supports_structured_output: true
