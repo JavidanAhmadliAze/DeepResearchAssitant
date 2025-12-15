@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deep_research_backend
+    command: uv run src/main.py  # Adjust if your main entrypoint differs
+    working_dir: /app
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./frontend:/app/frontend
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_WORKSPACE_ID=${LANGSMITH_WORKSPACE_ID}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT}
+      # Add other API keys as needed
+    ports:
+      - "8000:8000"  # Backend port
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile  # If frontend has its own Dockerfile
+    container_name: deep_research_frontend
+    ports:
+      - "8501:8501"  # Streamlit default port
+    volumes:
+      - ./frontend:/app
+      - ./data:/app/data
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+    depends_on:
+      - backend
+
+volumes:
+  data_volume:
