@@ -1,4 +1,3 @@
-from datetime import datetime
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
 from typing_extensions import Literal
@@ -7,10 +6,12 @@ from dotenv import load_dotenv
 from langgraph.checkpoint.memory import InMemorySaver
 from src.agent_interface.states import AgentInputState, AgentOutputState
 from src.agent_interface.schemas import ClarifyWithUser, ResearchQuestion
-from src.llm.gemini_client import create_gemini_model
+from src.llm.gemini_client import create_openai_model
 from langsmith import traceable
 from src.prompt_engineering.templates import get_prompt
 from src.utils.tools import get_today_str
+from backend.db import ResearchBrief, AgentMetrics
+from langchain_core.runnables import RunnableConfig
 
 
 load_dotenv()
@@ -18,58 +19,90 @@ load_dotenv()
 clarification_instructions = get_prompt("scope_agent","clarification_instructions")
 transform_messages_into_research_topic_prompt = get_prompt("scope_agent","transform_messages_into_research_topic_prompt")
 
-model = create_gemini_model("scope_agent")
+model = create_openai_model("scope_agent")
+
 
 @traceable
-def clarify_with_user(state: AgentInputState) -> Command[Literal["write_research_brief", "__end__"]]:
-    """
-    Determine if the user's request contains sufficient information to proceed with research.
+async def clarify_with_user(state: AgentInputState, config: RunnableConfig) -> Command[
+    Literal["write_research_brief", "__end__"]]:
 
-    Uses structured output to make deterministic decisions and avoid hallucination.
-    Routes to either research brief generation or ends with a clarification question.
-    """
+    db = config["configurable"].get("db_session")
+    task_id = config["configurable"].get("task_id")
 
-    structured_output_model = model.with_structured_output(ClarifyWithUser)
+    structured_output_model = model.with_structured_output(ClarifyWithUser, include_raw=True)
 
-    response = structured_output_model.invoke([
+    result = await structured_output_model.ainvoke([
         HumanMessage(content=clarification_instructions.format(
             messages=get_buffer_string(messages=state.get("messages", [])),
             date=get_today_str(), tools_optional=True
         ))
     ])
 
-    if response.need_clarification:
+    # Extracting from the dict returned by include_raw=True
+    brief_obj = result["parsed"]
+    raw_msg = result["raw"]
+
+    if db and task_id:
+        usage = raw_msg.usage_metadata
+        db.add(AgentMetrics(
+            task_id=task_id,
+            agent_name="scoping_agent_clarifier",
+            prompt_tokens=usage.get("input_tokens", 0),
+            completion_tokens=usage.get("output_tokens", 0),
+            trace_id=str(config.get("run_id", ""))
+        ))
+        # Note: We commit in the final node or here if we exit
+        await db.commit()
+
+    if brief_obj.need_clarification:
         return Command(
             goto=END,
-            update={"messages": [AIMessage(content=response.question)]}
+            update={"messages": [AIMessage(content=brief_obj.question)]}
         )
     else:
         return Command(
             goto="write_research_brief",
-            update={"messages": [AIMessage(content=response.verification)]}
+            update={"messages": [AIMessage(content=brief_obj.verification)]}
         )
 
+
 @traceable
-def write_research_brief(state: AgentOutputState):
-    """
-    Transform the conversation history into a comprehensive research brief.
+async def write_research_brief(state: AgentOutputState, config: RunnableConfig):
+    db = config["configurable"].get("db_session")
+    task_id = config["configurable"].get("task_id")
 
-    Uses structured output to ensure the brief follows the required format
-    and contains all necessary details for effective research.
-    """
-    # Set up structured output model
-    structured_output_model = model.with_structured_output(ResearchQuestion)
+    structured_output_model = model.with_structured_output(ResearchQuestion, include_raw=True)
 
-    response = structured_output_model.invoke([
+    # Use ainvoke for consistency
+    result = await structured_output_model.ainvoke([
         HumanMessage(content=transform_messages_into_research_topic_prompt.format(
             messages=get_buffer_string(state.get("messages", [])),
             date=get_today_str(), tools_optional=True
         ))
     ])
 
+    brief_obj = result["parsed"]
+    raw_msg = result["raw"]
+
+    if db and task_id:
+        db.add(ResearchBrief(
+            task_id=task_id,
+            finalized_question=brief_obj.research_brief
+        ))
+
+        usage = raw_msg.usage_metadata
+        db.add(AgentMetrics(
+            task_id=task_id,
+            agent_name="scoping_agent_writer",  # Changed name to be distinct
+            prompt_tokens=usage.get("input_tokens", 0),
+            completion_tokens=usage.get("output_tokens", 0),
+            trace_id=str(config.get("run_id", ""))
+        ))
+        await db.commit()
+
     return {
-        "research_brief": response.research_brief,
-        "supervisor_messages": [HumanMessage(content=f"{response.research_brief}.")]
+        "research_brief": brief_obj.research_brief,
+        "supervisor_messages": [HumanMessage(content=f"{brief_obj.research_brief}.")]
     }
 
 

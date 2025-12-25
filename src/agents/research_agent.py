@@ -7,10 +7,10 @@ from langchain.chat_models import init_chat_model
 import os
 from typing_extensions import Literal
 from langgraph.checkpoint.memory import InMemorySaver
-from src.llm.gemini_client import create_gemini_model
+from src.llm.gemini_client import create_openai_model
 from src.prompt_engineering.templates import get_prompt
 
-model = create_gemini_model("research_agent")
+model = create_openai_model("research_agent")
 research_agent_prompt = get_prompt("research_agent","research_agent_prompt")
 compress_research_system_prompt = get_prompt("research_agent","compress_research_system_prompt")
 compress_research_human_message = get_prompt("research_agent","compress_research_human_message")

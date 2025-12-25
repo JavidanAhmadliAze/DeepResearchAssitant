@@ -2,52 +2,58 @@
 # Model Configuration
 # ================================
 
-default_provider: gemini
+default_provider: openai
 
 # --------------------------------
 # Agent → Model routing
 # --------------------------------
 routing:
-  scope_agent: gemini_flash_lite
-  supervisor_agent: gemini_flash
-  research_agent: gemini_flash
-  final_reporter: gemini_flash
-  summarizer: gemini_flash
+  scope_agent: openai_clarifier
+  supervisor_agent: openai_light
+  research_agent: openai_research
+  final_reporter: openai_light
+  summarizer: openai_light
 
 # --------------------------------
 # Model definitions
 # --------------------------------
 models:
 
-  # Lightweight model for scoping, clarification, planning
-  gemini_flash_lite:
-    provider: gemini
-    model: gemini-2.5-flash-lite
+  # --------------------------------
+  # Clarification / scoping ONLY
+  # --------------------------------
+  openai_clarifier:
+    provider: openai
+    model: gpt-4o-mini
     temperature: 0.0
-    max_tokens: 512
+    max_tokens: 256
     timeout: 10
     retries: 1
     supports_tools: false
-    supports_structured_output: true
+    supports_structured_output: true   # SAFE
 
-  # Main research + reasoning model
-  gemini_flash:
-    provider: gemini
-    model: gemini-2.5-flash
-    temperature: 0.0
-    max_tokens: null        # null → Python None
-    timeout: 30
-    retries: 2
-    supports_tools: true
-    supports_structured_output: true
-
-  # Optional fallback (only used if enabled)
-  openai_optional:
+  # --------------------------------
+  # General lightweight reasoning
+  # --------------------------------
+  openai_light:
     provider: openai
     model: gpt-4o-mini
-    temperature: 0.3
-    max_tokens: 2048
-    timeout: 30
+    temperature: 0.0
+    max_tokens: 1024
+    timeout: 20
     retries: 2
     supports_tools: true
     supports_structured_output: true
+
+  # --------------------------------
+  # Deep research / long reasoning
+  # --------------------------------
+  openai_research:
+    provider: openai
+    model: gpt-4o
+    temperature: 0.2
+    max_tokens: 4096
+    timeout: 60
+    retries: 2
+    supports_tools: true
+    supports_structured_output: true  # ❗ avoid schemas here

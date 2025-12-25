@@ -6,15 +6,15 @@ from langgraph.types import Command
 from src.agents.research_agent import researcher_agent
 from src.data_retriever.output_retriever import retrieve_data_with_score
 from langgraph.graph import StateGraph, START, END
-import os
 import asyncio
 from typing_extensions import Literal
 from langgraph.checkpoint.memory import InMemorySaver
-from src.llm.gemini_client import create_gemini_model
+from src.llm.gemini_client import create_openai_model
 from src.prompt_engineering.templates import get_prompt
+from dotenv import load_dotenv
+load_dotenv()
 
-
-model = create_gemini_model("supervisor_agent")
+model = create_openai_model("supervisor_agent")
 lead_researcher_prompt = get_prompt("supervisor_agent","lead_researcher_prompt")
 tools = [ConductResearch, ResearchComplete, think_tool, retrieve_data_with_score]
 model_with_tools = model.bind_tools(tools)
@@ -79,8 +79,7 @@ async def supervisor(state: SupervisorState) ->  Command[Literal["supervisor_too
             "research_iterations": state.get("research_iterations", 0) + 1
         }
     )
-from dotenv import load_dotenv
-load_dotenv()
+
 @traceable
 async def supervisor_tools(state: SupervisorState) -> Command[Literal["supervisor", "__end__"]]:
     """Execute supervisor decisions - either conduct research or end the process.
