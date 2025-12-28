@@ -1,59 +1,31 @@
 # ================================
-# Model Configuration
+# Model Configuration (Google AI Studio)
 # ================================
 
-default_provider: openai
+default_provider: google
 
 # --------------------------------
 # Agent → Model routing
 # --------------------------------
+# Assigned based on task complexity vs. speed requirements
 routing:
-  scope_agent: openai_clarifier
-  supervisor_agent: openai_light
-  research_agent: openai_research
-  final_reporter: openai_light
-  summarizer: openai_light
+  scope_agent: gemini_2_5_flash_lite
+  supervisor_agent: gemini_2_5_flash
+  research_agent: gemini_2_5_flash
+  final_reporter: gemini_2_5_flash
+  summarizer: gemini_2_5_flash_lite
 
-# --------------------------------
-# Model definitions
-# --------------------------------
 models:
+  gemini_2_5_flash:
+    provider: google
+    model: gemini-2.5-flash
+    temperature: 0.2
+    max_tokens: 8192
+    timeout: 30
 
-  # --------------------------------
-  # Clarification / scoping ONLY
-  # --------------------------------
-  openai_clarifier:
-    provider: openai
-    model: gpt-4o-mini
-    temperature: 0.0
-    max_tokens: 256
-    timeout: 10
-    retries: 1
-    supports_tools: false
-    supports_structured_output: true   # SAFE
-
-  # --------------------------------
-  # General lightweight reasoning
-  # --------------------------------
-  openai_light:
-    provider: openai
-    model: gpt-4o-mini
+  gemini_2_5_flash_lite:
+    provider: google
+    model: gemini-2.5-flash-lite
     temperature: 0.0
     max_tokens: 1024
-    timeout: 20
-    retries: 2
-    supports_tools: true
-    supports_structured_output: true
-
-  # --------------------------------
-  # Deep research / long reasoning
-  # --------------------------------
-  openai_research:
-    provider: openai
-    model: gpt-4o
-    temperature: 0.2
-    max_tokens: 4096
-    timeout: 60
-    retries: 2
-    supports_tools: true
-    supports_structured_output: true  # ❗ avoid schemas here
+    timeout: 15

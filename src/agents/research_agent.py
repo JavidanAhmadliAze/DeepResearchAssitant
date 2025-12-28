@@ -1,16 +1,14 @@
-#from team_8.agentic_core.agents.orchestration.orchestrator_agent import max_researcher_iterations
 from src.utils.tools import get_today_str, think_tool, tavily_search
 from langgraph.graph import StateGraph, START, END
 from src.agent_interface.states import ResearcherState, ResearcherOutputState
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, filter_messages
-from langchain.chat_models import init_chat_model
-import os
 from typing_extensions import Literal
 from langgraph.checkpoint.memory import InMemorySaver
-from src.llm.gemini_client import create_openai_model
+from src.llm.gemini_client import create_gemini_model
 from src.prompt_engineering.templates import get_prompt
+from langchain_core.runnables import RunnableConfig
 
-model = create_openai_model("research_agent")
+model = create_gemini_model("research_agent")
 research_agent_prompt = get_prompt("research_agent","research_agent_prompt")
 compress_research_system_prompt = get_prompt("research_agent","compress_research_system_prompt")
 compress_research_human_message = get_prompt("research_agent","compress_research_human_message")
@@ -38,7 +36,7 @@ def llm_call(state: ResearcherState) :
         ]
     }
 
-def tool_node(state: ResearcherState):
+def tool_node(state: ResearcherState, config: RunnableConfig):
     """Execute all tool calls from the previous LLM response and show outputs."""
 
     tool_calls = state["researcher_messages"][-1].tool_calls
@@ -133,5 +131,9 @@ agent_builder.add_conditional_edges(
 agent_builder.add_edge("tool_node", "llm_call") # Loop back for more research
 agent_builder.add_edge("compress_research", END)
 
-# Compile the agent
-researcher_agent = agent_builder.compile(checkpointer=checkpoint)
+def get_research_agent(checkpointer = None):
+    """
+    Returns a compiled instance of the researcher agent.
+    If checkpointer is provided (like PostgresSaver), the agent will be persistent.
+    """
+    return agent_builder.compile(checkpointer=checkpointer)

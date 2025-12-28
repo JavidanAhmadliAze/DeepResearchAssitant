@@ -12,17 +12,16 @@ class Message:
 
 class ChatRequest(BaseModel):
 
-    chat_id : UUID = Field(description="ID of the new conversation'")
     text : str
 
 class ChatResponse(BaseModel):
 
-    chat_id : UUID = Field(description="ID of the chat")
+    chat_id : str = Field(description="ID of the chat")
     messages : List = Field(description="list of messages")
 
 class ChatHistoryItem(BaseModel):
 
-    chat_id : UUID = Field(description="Chat identifier")
+    chat_id : str = Field(description="Chat identifier")
     title : Optional[str] = Field(description="first message snippet")
     last_updated : Optional[datetime] = Field(None, description="Last updated timestamp")
 

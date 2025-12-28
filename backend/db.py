@@ -3,21 +3,23 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 from fastapi import Depends
+import contextlib
 
 from sqlalchemy import String, Text, ForeignKey, Enum, Integer, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.types import Uuid
 from fastapi_users.db import SQLAlchemyUserDatabase, SQLAlchemyBaseUserTableUUID
+import os
 
-DATABASE_URL = "postgresql+asyncpg://user:password@localhost/dbname"
+DATABASE_URL = os.getenv("ASYNC_DATABASE_URL")
 
 class Base(DeclarativeBase):
     pass
 
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
-
+    __tablename__ = "users"
     tasks: Mapped[List["ResearchTask"]] = relationship(back_populates="user")
 
 
@@ -51,6 +53,8 @@ class ResearchTask(Base):
     brief: Mapped["ResearchBrief"] = relationship(back_populates="task", uselist=False)
     thoughts: Mapped[List["SupervisorThought"]] = relationship(back_populates="task")
     subtasks: Mapped[List["ResearchSubtask"]] = relationship(back_populates="task")
+    agentic_metrics: Mapped["AgentMetrics"] = relationship(back_populates="task")
+
 
 
 class ResearchBrief(Base):
@@ -121,25 +125,6 @@ class ReportCitation(Base):
     finding: Mapped["Finding"] = relationship(back_populates="citations")
 
 
-class Evaluation(Base):
-    """Stores automated or human-led assessments of a specific task."""
-    __tablename__ = "evaluations"
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("research_tasks.id"))
-
-
-    # Metrics
-    relevance_score: Mapped[float] = mapped_column(nullable=True)  # 0.0 - 1.0
-    groundedness_score: Mapped[float] = mapped_column(nullable=True)  # No hallucinations
-    completeness_score: Mapped[float] = mapped_column(nullable=True)  # Did it answer all parts?
-
-    llm_judge_feedback: Mapped[Optional[str]] = mapped_column(Text)
-    human_rating: Mapped[Optional[int]] = mapped_column(Integer)  # e.g., 1-5 stars
-
-    task: Mapped["ResearchTask"] = relationship()
-
-
 class AgentMetrics(Base):
     """Tracks the 'cost of thinking' for each task."""
     __tablename__ = "agent_metrics"
@@ -154,6 +139,7 @@ class AgentMetrics(Base):
     total_latency_ms: Mapped[int] = mapped_column(default=0)  # Time to complete
 
     tool_calls_count: Mapped[int] = mapped_column(default=0)  # Number of searches performed
+    task: Mapped["ResearchTask"] = relationship(back_populates="agentic_metrics")
 
 engine = create_async_engine(DATABASE_URL)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -165,8 +151,10 @@ async def create_db_and_tables():
         await conn.run_sync(Base.metadata.create_all)
 
 async def get_async_session():
-    async with async_session_maker as session:
+    async with async_session_maker() as session:
         yield session
 
 async def get_user_db(session: AsyncSession = Depends(get_async_session)):
     yield SQLAlchemyUserDatabase(session, User)
+
+get_async_session_context = contextlib.asynccontextmanager(get_async_session)

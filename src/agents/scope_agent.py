@@ -6,12 +6,14 @@ from dotenv import load_dotenv
 from langgraph.checkpoint.memory import InMemorySaver
 from src.agent_interface.states import AgentInputState, AgentOutputState
 from src.agent_interface.schemas import ClarifyWithUser, ResearchQuestion
-from src.llm.gemini_client import create_openai_model
+from src.llm.gemini_client import create_gemini_model
 from langsmith import traceable
 from src.prompt_engineering.templates import get_prompt
 from src.utils.tools import get_today_str
 from backend.db import ResearchBrief, AgentMetrics
 from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
 
 
 load_dotenv()
@@ -19,7 +21,7 @@ load_dotenv()
 clarification_instructions = get_prompt("scope_agent","clarification_instructions")
 transform_messages_into_research_topic_prompt = get_prompt("scope_agent","transform_messages_into_research_topic_prompt")
 
-model = create_openai_model("scope_agent")
+model = create_gemini_model("scope_agent")
 
 
 @traceable
@@ -116,6 +118,4 @@ deep_researcher_builder.add_node("write_research_brief", write_research_brief)
 deep_researcher_builder.add_edge(START, "clarify_with_user")
 deep_researcher_builder.add_edge("write_research_brief", END)
 
-# Compile the workflow
-memory = InMemorySaver()
-scope = deep_researcher_builder.compile(checkpointer = memory)
+

@@ -1,38 +1,33 @@
-# ======== Base Image ========
-FROM python:3.13-slim
+# 1. Start with a slim version of Python 3.13
+FROM python:3.13-slim-bookworm
 
-# ======== Environment Variables ========
+# 2. Set Python environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
+# Ensures the app can find your local modules
+ENV PYTHONPATH=/app
 
-# ======== Set Working Directory ========
-WORKDIR /app
-
-# ======== Install System Dependencies ========
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    git \
+# 3. Install Linux system libraries
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    gcc \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# ======== Install uv Project Manager ========
-RUN pip install --upgrade pip
-RUN pip install uv
+# 4. Working directory
+WORKDIR /app
 
-# ======== Copy Project Files ========
-COPY pyproject.toml uv.lock /app/
-COPY src/ /app/src/
-COPY config/ /app/config/
-COPY data/ /app/data/
-COPY frontend/ /app/frontend/
+# 5. Copy and install requirements FIRST (for layer caching)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# ======== Install Python Dependencies ========
-RUN uv install --no-dev
+# 6. Copy the rest of the project
+COPY . .
 
-# ======== Expose Streamlit Port ========
+# 7. Default port (FastAPI)
+EXPOSE 8000
+# Default port (Streamlit)
 EXPOSE 8501
 
-# ======== Default Command ========
-CMD ["streamlit", "run", "frontend/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Default CMD (Overridden by docker-compose)
+CMD ["python", "-m", "uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]

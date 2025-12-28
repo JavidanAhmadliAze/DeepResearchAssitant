@@ -1,112 +1,180 @@
-import sys
-from pathlib import Path
-
-ROOT_DIR = Path(__file__).resolve().parents[1]
-sys.path.append(str(ROOT_DIR))
-
 import streamlit as st
-import asyncio
+import requests
+import uuid
 import os
-from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, AIMessage
-from src.agents.workflow_executor import agent
-from src.utils.tools import get_today_str
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_chroma import Chroma
-from langchain_core.documents import Document
 
-load_dotenv()
-os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
+# --- CONFIGURATION ---
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
-# --- Streamlit Page Setup ---
-st.set_page_config(page_title="Deep Research Agent", layout="wide")
-st.title("🧠 Deep Research Agent Chat")
+st.set_page_config(page_title="Deep Researcher", layout="wide", page_icon="🧐")
 
-# --- Session State Setup (must be done before any access) ---
-st.session_state.setdefault("conversation_history", [])
-st.session_state.setdefault("thread", {"configurable": {"thread_id": "1", "recursion_limit": 50}})
-st.session_state.setdefault("final_text", "")   # initialize final_text as empty string
-st.session_state.setdefault("need_research", False)
-# --- Vector store: initialize once (top-level) ---
-# You can move this to its own module so it's not re-created repeatedly.
+# --- SESSION STATE INITIALIZATION ---
+if "token" not in st.session_state:
+    st.session_state.token = None
+if "chat_id" not in st.session_state:
+    st.session_state.chat_id = str(uuid.uuid4())
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "research_active" not in st.session_state:
+    st.session_state.research_active = False
 
-embedding = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
-VECTOR_DB_PATH = r"C:\Users\User\PythonProject\data\output"
 
-vector_store = Chroma(
-    collection_name="deep_research_texts",
-    embedding_function=embedding,
-    persist_directory=VECTOR_DB_PATH
-)
+# --- AUTH HELPERS ---
+def get_headers():
+    return {"Authorization": f"Bearer {st.session_state.token}"}
 
-# --- Chat Display ---
-st.subheader("💬 Conversation")
-for msg in st.session_state["conversation_history"]:
-    if isinstance(msg, HumanMessage):
-        st.chat_message("user").markdown(msg.content)
-    elif isinstance(msg, AIMessage):
-        st.chat_message("assistant").markdown(msg.content)
 
-# --- Chat Input ---
-user_input = st.chat_input("Ask your research question...")
-
-# --- Handle Input ---
-if user_input:
-    st.session_state["conversation_history"].append(HumanMessage(content=user_input))
-    st.chat_message("user").markdown(user_input)
-
-    async def run_agent():
-        # send full history to your agent
-        result = await agent.ainvoke(
-            {"messages": st.session_state["conversation_history"]},
-            config=st.session_state["thread"]
+def login(email, password):
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/auth/jwt/login",
+            data={"username": email, "password": password}
         )
+        if response.status_code == 200:
+            st.session_state.token = response.json()["access_token"]
+            st.session_state.login_email = email
+            st.success("Logged in successfully!")
+            st.rerun()
+        else:
+            st.error("Invalid email or password.")
+    except Exception as e:
+        st.error(f"Backend connection failed: {e}")
 
-        # last AI message for chat display (keeps labeling)
-        ai_msg = result["messages"][-1]
-        st.session_state["conversation_history"].append(ai_msg)
-        st.session_state["need_research"] = result.get("trigger_search", False)
-        # store final_report (if present) into session_state
-        notes = result.get("notes",[])
-        findings = "\n".join(notes)
-        st.session_state["final_text"] = findings or ""  # ensure string
+
+def register(email, password):
+    try:
+        payload = {"email": email, "password": password}
+        response = requests.post(f"{API_BASE_URL}/auth/register", json=payload)
+        if response.status_code == 201:
+            st.success("Account created! Please switch to 'Sign In'.")
+        else:
+            st.error(f"Registration failed: {response.text}")
+    except Exception as e:
+        st.error(f"Connection error: {e}")
 
 
+def logout():
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
 
-        return ai_msg
 
-    with st.spinner("🧩 Running deep research..."):
-        ai_message = asyncio.run(run_agent())
+# --- API HELPERS ---
+def fetch_chat_history(thread_id):
+    try:
+        resp = requests.get(f"{API_BASE_URL}/chat/{thread_id}", headers=get_headers())
+        if resp.status_code == 200:
+            return resp.json()
+    except:
+        return None
+    return None
 
-    st.chat_message("assistant").markdown(ai_message.content)
 
-# --- Persist final report into Chroma (only when present and not already stored) ---
-# optional: you might want to track if a given final_text was already stored to avoid duplicates
+# --- POLLING FRAGMENT (Only for heavy research) ---
+# --- REFINED POLLING FRAGMENT ---
+@st.fragment(run_every="3s")
+def poll_research_status(chat_id):
+    if st.session_state.research_active:
+        poll_data = fetch_chat_history(chat_id)
+        if poll_data:
+            current_status = poll_data.get("status")
+            st.write(f"⏳ **Agent Activity:** {current_status}...")
 
-if st.session_state.get("final_text"):
+            # Logic 1: If a new message appeared, update and keep polling if not done
+            msgs = poll_data.get("messages", [])
+            if len(msgs) > len(st.session_state.messages):
+                st.session_state.messages = msgs
+                # If we aren't 'COMPLETED' yet, we just update the list but stay in fragment
+                if current_status != "COMPLETED":
+                    st.rerun()
 
-    final_text = st.session_state["final_text"]
-    if  st.session_state.get("need_research", False):
-        # you may want a flag to avoid re-adding the same final_text on each rerun
-        doc = Document(
-            page_content=final_text,
-            metadata={
-                "user_query": user_input,
-                "timestamp": get_today_str(),
-                "type": "final_report",
-            }
-        )
+            # Logic 2: If the background worker marked the task as COMPLETED
+            if current_status == "COMPLETED":
+                st.session_state.messages = msgs
+                st.session_state.research_active = False
+                st.success("Research Complete!")
+                st.rerun() # Final full rerun to show the report and re-enable input
+            # --- UI: AUTHENTICATION ---
 
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1800,
-            chunk_overlap=200,
-            add_start_index=True
-        )
 
-        all_splits = text_splitter.split_documents([doc])
-        vector_store.add_documents(documents=all_splits)
-        print("Doc added to Database")
-    else:
-        print("Data is available in Database no need to add")
+if not st.session_state.token:
+    st.title("🧐 Deep Researcher")
+    tab_login, tab_signup = st.tabs(["Sign In", "Create Account"])
+    with tab_signup:
+        reg_email = st.text_input("New Email", key="reg_email")
+        reg_pwd = st.text_input("New Password", type="password", key="reg_pwd")
+        if st.button("Register", use_container_width=True):
+            register(reg_email, reg_pwd)
+    with tab_login:
+        email = st.text_input("Email", key="login_email")
+        password = st.text_input("Password", type="password", key="login_pwd")
+        if st.button("Sign In", use_container_width=True):
+            login(email, password)
+    st.stop()
 
+# --- SIDEBAR ---
+with st.sidebar:
+    st.title("Settings")
+    st.write(f"Logged in: `{st.session_state.get('login_email')}`")
+    if st.button("🚪 Logout", use_container_width=True):
+        logout()
+    st.divider()
+    if st.button("➕ New Chat", use_container_width=True):
+        st.session_state.chat_id = str(uuid.uuid4())
+        st.session_state.messages = []
+        st.session_state.research_active = False
+        st.rerun()
+
+# --- MAIN CHAT UI ---
+st.title("🧐 Deep Research Agent")
+
+# 1. Display History
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# 2. Polling Placeholder (Displays ONLY while research_active is True)
+if st.session_state.research_active:
+    with st.chat_message("assistant"):
+        poll_research_status(st.session_state.chat_id)
+
+# 3. Chat Input
+if prompt := st.chat_input("What would you like to research?"):
+    if not st.session_state.research_active:
+        # Show User Message immediately
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Immediate Assistant Response (Synchronous for Clarifications)
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing request..."):
+                try:
+                    response = requests.post(
+                        f"{API_BASE_URL}/chat/{st.session_state.chat_id}/messages",
+                        json={"text": prompt},
+                        headers=get_headers()
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        # If the backend sent a message (Clarification or Start message)
+                        if data.get("messages"):
+                            ai_msg = data["messages"][-1]["content"]
+                            st.markdown(ai_msg)
+                            st.session_state.messages.append({"role": "assistant", "content": ai_msg})
+
+                            # Decide if we need to switch to background polling
+                            # We trigger research if the AI says it's starting or searching
+                            research_keywords = ["starting research", "deep dive", "searching", "analyzing"]
+                            if any(word in ai_msg.lower() for word in research_keywords):
+                                st.session_state.research_active = True
+                                st.rerun()
+                        else:
+                            # Fallback if messages list is empty but 200 OK
+                            st.session_state.research_active = True
+                            st.rerun()
+                    else:
+                        st.error("Backend error. Please try again.")
+                except Exception as e:
+                    st.error(f"Failed to reach agent: {e}")

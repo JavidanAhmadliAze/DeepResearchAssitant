@@ -1,45 +1,63 @@
-version: "3.9"
+version: '3.8'
 
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: deep_research_backend
-    command: uv run src/main.py  # Adjust if your main entrypoint differs
-    working_dir: /app
-    volumes:
-      - ./src:/app/src
-      - ./config:/app/config
-      - ./data:/app/data
-      - ./frontend:/app/frontend
-      - ./pyproject.toml:/app/pyproject.toml
-      - ./uv.lock:/app/uv.lock
+  db:
+    image: postgres:15-alpine
+    container_name: research_postgres
+    restart: always
+    # Added env_file so the healthcheck can see DB_USER
+    env_file: .env
     environment:
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
-      - LANGSMITH_WORKSPACE_ID=${LANGSMITH_WORKSPACE_ID}
-      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT}
-      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT}
-      # Add other API keys as needed
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
-      - "8000:8000"  # Backend port
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # Fix: Use standard POSTGRES_USER env var to avoid interpolation empty strings
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: research_backend
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '8000:8000'
+    env_file: .env
+    environment:
+      - DATABASE_URL=${ASYNC_DATABASE_URL}
+      # Corrected: Only /app needed because your imports start with 'backend.' or 'src.'
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+      - chroma_data:/app/data/output
+    # Fix: Run from the root /app so it can find the 'config/' folder
+    working_dir: /app
+    command: python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile  # If frontend has its own Dockerfile
-    container_name: deep_research_frontend
-    ports:
-      - "8501:8501"  # Streamlit default port
-    volumes:
-      - ./frontend:/app
-      - ./data:/app/data
-    environment:
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+    build: .
+    container_name: research_streamlit
     depends_on:
       - backend
+    ports:
+      - "8501:8501"
+    env_file: .env
+    environment:
+      - API_URL=http://backend:8000
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: streamlit run frontend/app.py --server.port 8501 --server.address 0.0.0.0
 
 volumes:
-  data_volume:
+  postgres_data:
+  chroma_data:

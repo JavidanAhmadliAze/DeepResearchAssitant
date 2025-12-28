@@ -3,18 +3,19 @@ from src.agent_interface.tools import  ConductResearch, ResearchComplete
 from langchain_core.messages import SystemMessage, ToolMessage, BaseMessage, HumanMessage, filter_messages
 from src.utils.tools import get_today_str, think_tool
 from langgraph.types import Command
-from src.agents.research_agent import researcher_agent
+from src.agents.research_agent import get_research_agent
 from src.data_retriever.output_retriever import retrieve_data_with_score
 from langgraph.graph import StateGraph, START, END
+from langchain_core.runnables import RunnableConfig
 import asyncio
+
 from typing_extensions import Literal
-from langgraph.checkpoint.memory import InMemorySaver
-from src.llm.gemini_client import create_openai_model
+from src.llm.gemini_client import create_gemini_model
 from src.prompt_engineering.templates import get_prompt
 from dotenv import load_dotenv
 load_dotenv()
 
-model = create_openai_model("supervisor_agent")
+model = create_gemini_model("supervisor_agent")
 lead_researcher_prompt = get_prompt("supervisor_agent","lead_researcher_prompt")
 tools = [ConductResearch, ResearchComplete, think_tool, retrieve_data_with_score]
 model_with_tools = model.bind_tools(tools)
@@ -45,7 +46,7 @@ def get_notes_from_tool_calls(messages: list[BaseMessage]) -> list[str]:
 from langsmith import traceable
 
 @traceable
-async def supervisor(state: SupervisorState) ->  Command[Literal["supervisor_tools"]]:
+async def supervisor(state: SupervisorState, config: RunnableConfig) ->  Command[Literal["supervisor_tools"]]:
     """Coordinate research activities.
 
        Analyzes the research brief and current progress to decide:
@@ -70,7 +71,7 @@ async def supervisor(state: SupervisorState) ->  Command[Literal["supervisor_too
 
     messages = [SystemMessage(content=system_message)] + supervisor_messages
 
-    response = await model_with_tools.ainvoke(messages)
+    response = await model_with_tools.ainvoke(messages, config=config)
 
     return Command(
         goto="supervisor_tools",
@@ -81,7 +82,7 @@ async def supervisor(state: SupervisorState) ->  Command[Literal["supervisor_too
     )
 
 @traceable
-async def supervisor_tools(state: SupervisorState) -> Command[Literal["supervisor", "__end__"]]:
+async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Command[Literal["supervisor", "__end__"]]:
     """Execute supervisor decisions - either conduct research or end the process.
 
     Handles:
@@ -97,6 +98,7 @@ async def supervisor_tools(state: SupervisorState) -> Command[Literal["superviso
     Returns:
         Command to continue supervision, end process, or handle errors
     """
+
     supervisor_messages = state.get("supervisor_messages", [])
     research_iterations = state.get("research_iterations", 0)
     most_recent_message = supervisor_messages[-1]
@@ -115,6 +117,8 @@ async def supervisor_tools(state: SupervisorState) -> Command[Literal["superviso
         tool_call["name"] == "ResearchComplete"
         for tool_call in most_recent_message.tool_calls
     )
+
+    checkpointer = config.get("configurable", {}).get("checkpointer")
 
     if exceeded_iterations or no_tool_calls or research_complete:
         should_end = True
@@ -152,7 +156,7 @@ async def supervisor_tools(state: SupervisorState) -> Command[Literal["superviso
 
             for tool_call in retriever_tool_calls:
                 observation = retrieve_data_with_score.invoke(state.get("research_brief"))
-                if observation.get("needs_research", False):
+                if observation.get("needs_research"):
                     trigger_search=True
 
                 tool_messages.append(
@@ -162,19 +166,27 @@ async def supervisor_tools(state: SupervisorState) -> Command[Literal["superviso
                         tool_call_id=tool_call["id"]
                     )
                 )
-
+            researcher_agent = get_research_agent(checkpointer=checkpointer)
             # Handle ConductResearch calls (asynchronous)
             if conduct_research_calls:
                 # Launch parallel research agents
-                coros = [
-                    researcher_agent.ainvoke({
-                        "researcher_messages": [
-                            HumanMessage(content=tool_call["args"]["research_topic"])
-                        ],
-                        "research_topic": tool_call["args"]["research_topic"]
-                    })
-                    for tool_call in conduct_research_calls
-                ]
+                coros = []
+
+                for i, tool_call in enumerate(conduct_research_calls):
+                    sub_config = {
+                        "configurable" : {
+                            "thread_id": config["configurable"]["thread_id"],
+                            "checkpoint_ns": f"research_{i}",
+                        }
+                    }
+                    coros.append(
+                        researcher_agent.ainvoke({
+                            "researcher_messages": [
+                                HumanMessage(content=tool_call["args"]["research_topic"])
+                            ],
+                            "research_topic": tool_call["args"]["research_topic"]
+                        },config=sub_config)
+                    )
 
                 # Wait for all research to complete
                 tool_results = await asyncio.gather(*coros)
@@ -225,11 +237,10 @@ async def supervisor_tools(state: SupervisorState) -> Command[Literal["superviso
             }
         )
 
-checkpoint = InMemorySaver()
+
 
 supervisor_builder = StateGraph(SupervisorState)
 supervisor_builder.add_node("supervisor", supervisor)
 supervisor_builder.add_node("supervisor_tools", supervisor_tools)
 supervisor_builder.add_edge(START, "supervisor")
-supervisor_agent = supervisor_builder.compile(checkpointer=checkpoint)
 

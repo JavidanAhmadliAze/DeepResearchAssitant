@@ -1,16 +1,18 @@
-from src.agent_interface.states import AgentInputState, AgentOutputState, SupervisorState
+from src.agent_interface.states import AgentInputState, AgentOutputState
 from src.utils.tools import get_today_str
 from langchain_core.messages import HumanMessage, AIMessage
-from src.llm.gemini_client import create_openai_model
+from src.llm.gemini_client import create_gemini_model
 from src.prompt_engineering.templates import get_prompt
 from src.agents.supervisor_agent import supervisor, supervisor_tools
 from src.agents.scope_agent import clarify_with_user, write_research_brief
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import InMemorySaver
 from langsmith import traceable
-from dotenv import load_dotenv
+from psycopg_pool import AsyncConnectionPool
+import os
 
-model = create_openai_model("final_reporter")
+raw_url = os.getenv("ASYNC_DATABASE_URL")
+DATABASE_URL = raw_url.replace("+asyncpg", "")
+model = create_gemini_model("final_reporter")
 final_report_generation_prompt = get_prompt("final_reporter", "final_report_generation_prompt")
 
 @traceable
@@ -68,6 +70,6 @@ deep_researcher_builder.add_edge("supervisor", "supervisor_tools")
 deep_researcher_builder.add_edge("supervisor_tools", "final_report_generation")
 deep_researcher_builder.add_edge("final_report_generation", END)
 
-memory = InMemorySaver()
-# Compile the full workflow
-agent = deep_researcher_builder.compile(checkpointer=memory)
+connection_pool = AsyncConnectionPool(conninfo=DATABASE_URL, max_size=20)
+
+
