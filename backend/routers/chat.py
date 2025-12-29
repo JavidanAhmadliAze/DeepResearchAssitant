@@ -1,3 +1,5 @@
+import uuid
+import datetime
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from backend.services.background_worker import run_agent_workflow
 from src.agents.workflow_executor import connection_pool, deep_researcher_builder
@@ -23,6 +25,30 @@ async def handle_agent_chat(
         background_tasks: BackgroundTasks,
         db: AsyncSession = Depends(get_async_session),
         user: User = Depends(current_active_user)):
+
+    query = select(ResearchTask).where(ResearchTask.thread_id==chat_id)
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        task=ResearchTask(
+        id=uuid.uuid4(),
+        thread_id=chat_id,
+        user_id=user.id,
+        initial_query=payload.text,
+        status=TaskStatus.CLARIFYING
+        )
+        db.add(task)
+        await db.commit()
+
+    else:
+        await db.execute(
+            update(ResearchTask)
+            .where(ResearchTask.thread_id == chat_id)
+            .values(updated_at=datetime.datetime.utcnow())
+        )
+        await db.commit()
+
 
     async with connection_pool.connection() as conn:
         checkpointer = AsyncPostgresSaver(conn)

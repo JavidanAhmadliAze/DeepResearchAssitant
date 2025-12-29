@@ -4,11 +4,13 @@ from src.agent_interface.states import ResearcherState, ResearcherOutputState
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, filter_messages
 from typing_extensions import Literal
 from langgraph.checkpoint.memory import InMemorySaver
-from src.llm.gemini_client import create_gemini_model
+from src.llm.gemini_client import create_model
 from src.prompt_engineering.templates import get_prompt
 from langchain_core.runnables import RunnableConfig
+from dotenv import load_dotenv
+load_dotenv()
 
-model = create_gemini_model("research_agent")
+model = create_model("research_agent")
 research_agent_prompt = get_prompt("research_agent","research_agent_prompt")
 compress_research_system_prompt = get_prompt("research_agent","compress_research_system_prompt")
 compress_research_human_message = get_prompt("research_agent","compress_research_human_message")
@@ -36,7 +38,7 @@ def llm_call(state: ResearcherState) :
         ]
     }
 
-def tool_node(state: ResearcherState, config: RunnableConfig):
+def tool_node(state: ResearcherState):
     """Execute all tool calls from the previous LLM response and show outputs."""
 
     tool_calls = state["researcher_messages"][-1].tool_calls
@@ -131,9 +133,4 @@ agent_builder.add_conditional_edges(
 agent_builder.add_edge("tool_node", "llm_call") # Loop back for more research
 agent_builder.add_edge("compress_research", END)
 
-def get_research_agent(checkpointer = None):
-    """
-    Returns a compiled instance of the researcher agent.
-    If checkpointer is provided (like PostgresSaver), the agent will be persistent.
-    """
-    return agent_builder.compile(checkpointer=checkpointer)
+research_agent = agent_builder.compile(checkpointer=checkpoint)

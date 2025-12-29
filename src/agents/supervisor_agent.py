@@ -3,19 +3,19 @@ from src.agent_interface.tools import  ConductResearch, ResearchComplete
 from langchain_core.messages import SystemMessage, ToolMessage, BaseMessage, HumanMessage, filter_messages
 from src.utils.tools import get_today_str, think_tool
 from langgraph.types import Command
-from src.agents.research_agent import get_research_agent
+from src.agents.research_agent import research_agent
 from src.data_retriever.output_retriever import retrieve_data_with_score
 from langgraph.graph import StateGraph, START, END
 from langchain_core.runnables import RunnableConfig
 import asyncio
 
 from typing_extensions import Literal
-from src.llm.gemini_client import create_gemini_model
+from src.llm.gemini_client import create_model
 from src.prompt_engineering.templates import get_prompt
 from dotenv import load_dotenv
 load_dotenv()
 
-model = create_gemini_model("supervisor_agent")
+model = create_model("supervisor_agent")
 lead_researcher_prompt = get_prompt("supervisor_agent","lead_researcher_prompt")
 tools = [ConductResearch, ResearchComplete, think_tool, retrieve_data_with_score]
 model_with_tools = model.bind_tools(tools)
@@ -82,119 +82,84 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) ->  Command
     )
 
 @traceable
-async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Command[Literal["supervisor", "__end__"]]:
-    """Execute supervisor decisions - either conduct research or end the process.
-
-    Handles:
-    - Retrieve data from Vector database if relevant information exist there
-    - Executing think_tool calls for strategic reflection
-    - Launching parallel research agents for different topics
-    - Aggregating research results
-    - Determining when research is complete
-
-    Args:
-        state: Current supervisor state with messages and iteration count
-
-    Returns:
-        Command to continue supervision, end process, or handle errors
+async def supervisor_tools(state: SupervisorState) -> Command[Literal["supervisor","__end__"]]:
     """
+    Execute supervisor decisions - either conduct research or end the process.
+
+   Handles:
+   - Retrieve data from Vector database if relevant information exist there
+   - Executing think_tool calls for strategic reflection
+   - Launching parallel research agents for different topics
+   - Aggregating research results
+   - Determining when research is complete
+
+   Args:
+       state: Current supervisor state with messages and iteration count
+
+   Returns:
+       Command to continue supervision, end process, or handle errors
+   """
 
     supervisor_messages = state.get("supervisor_messages", [])
     research_iterations = state.get("research_iterations", 0)
     most_recent_message = supervisor_messages[-1]
 
-    # Initialize variables for single return pattern
     tool_messages = []
     all_raw_notes = []
-    next_step = "supervisor"  # Default next step
+    next_step = "supervisor"
     trigger_search = state.get("trigger_search", False)
     should_end = False
 
-    # Check exit criteria first
-    exceeded_iterations = research_iterations >= max_researcher_iterations
+    exceeded_iterations = research_iterations>=max_researcher_iterations
     no_tool_calls = not most_recent_message.tool_calls
+
     research_complete = any(
         tool_call["name"] == "ResearchComplete"
         for tool_call in most_recent_message.tool_calls
     )
 
-    checkpointer = config.get("configurable", {}).get("checkpointer")
-
-    if exceeded_iterations or no_tool_calls or research_complete:
+    if  exceeded_iterations or no_tool_calls or research_complete:
         should_end = True
         next_step = END
 
-    else:
-        # Execute ALL tool calls before deciding next step
+    else :
         try:
-            # Separate think_tool calls from ConductResearch calls
-            think_tool_calls = [
-                tool_call for tool_call in most_recent_message.tool_calls
-                if tool_call["name"] == "think_tool"
-            ]
+            think_tool_calls = [tool_call for tool_call in most_recent_message.tool_calls
+                                if tool_call["name"]=="think_tool"]
 
-            conduct_research_calls = [
-                tool_call for tool_call in most_recent_message.tool_calls
-                if tool_call["name"] == "ConductResearch"
-            ]
+            conduct_research_calls = [tool_call for tool_call in most_recent_message.tool_calls
+                                if tool_call["name"]=="ConductResearch"]
 
-            retriever_tool_calls = [
-                tool_call for tool_call in most_recent_message.tool_calls
-                if tool_call["name"] == "retrieve_data_with_score"
-            ]
+            retriever_tool_calls = [tool_call for tool_call in most_recent_message.tool_calls
+                                if tool_call["name"]=="retrieve_data_with_score"]
 
-            # Handle think_tool calls (synchronous)
             for tool_call in think_tool_calls:
-                observation = think_tool.invoke(tool_call["args"])
-                tool_messages.append(
-                    ToolMessage(
-                        content=observation,
-                        name=tool_call["name"],
-                        tool_call_id=tool_call["id"]
-                    )
-                )
+                observations = think_tool.invoke(tool_call["args"])
+                tool_messages.append(ToolMessage(
+                    content=observations,
+                    name=tool_call["name"],
+                    tool_call_id=tool_call["id"]
+                ))
 
             for tool_call in retriever_tool_calls:
-                observation = retrieve_data_with_score.invoke(state.get("research_brief"))
-                if observation.get("needs_research"):
-                    trigger_search=True
+                observations = retrieve_data_with_score.invoke(state.get("research_brief",""))
+                tool_messages.append(ToolMessage(
+                    content=observations,
+                    name=tool_call["name"],
+                    tool_call_id=tool_call["id"]
+                ))
 
-                tool_messages.append(
-                    ToolMessage(
-                        content=observation,
-                        name=tool_call["name"],
-                        tool_call_id=tool_call["id"]
-                    )
-                )
-            researcher_agent = get_research_agent(checkpointer=checkpointer)
-            # Handle ConductResearch calls (asynchronous)
             if conduct_research_calls:
-                # Launch parallel research agents
-                coros = []
+                coros = [
+                    research_agent.ainvoke({
+                        "researcher_messages": [HumanMessage(content=tool_call["args"]["research_topic"])],
+                        "research_topic": tool_call["args"]["research_topic"]
+                    })
+                    for tool_call in conduct_research_calls
+                ]
 
-                for i, tool_call in enumerate(conduct_research_calls):
-                    sub_config = {
-                        "configurable" : {
-                            "thread_id": config["configurable"]["thread_id"],
-                            "checkpoint_ns": f"research_{i}",
-                        }
-                    }
-                    coros.append(
-                        researcher_agent.ainvoke({
-                            "researcher_messages": [
-                                HumanMessage(content=tool_call["args"]["research_topic"])
-                            ],
-                            "research_topic": tool_call["args"]["research_topic"]
-                        },config=sub_config)
-                    )
-
-                # Wait for all research to complete
                 tool_results = await asyncio.gather(*coros)
 
-                # Format research results as tool messages
-                # Each sub-agent returns compressed research findings in result["compressed_research"]
-                # We write this compressed research as the content of a ToolMessage, which allows
-                # the supervisor to later retrieve these findings via get_notes_from_tool_calls()
                 research_tool_messages = [
                     ToolMessage(
                         content=result.get("compressed_research", "Error synthesizing research report"),
@@ -205,7 +170,6 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
 
                 tool_messages.extend(research_tool_messages)
 
-                # Aggregate raw notes from all research
                 all_raw_notes = [
                     "\n".join(result.get("raw_notes", []))
                     for result in tool_results
@@ -216,7 +180,6 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
             should_end = True
             next_step = END
 
-    # Single return point with appropriate state updates
     if should_end:
         print(f"IS SEARCH NEEDED:{trigger_search}")
         return Command(
@@ -237,10 +200,4 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
             }
         )
 
-
-
-supervisor_builder = StateGraph(SupervisorState)
-supervisor_builder.add_node("supervisor", supervisor)
-supervisor_builder.add_node("supervisor_tools", supervisor_tools)
-supervisor_builder.add_edge(START, "supervisor")
 

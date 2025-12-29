@@ -1,7 +1,7 @@
 from src.agent_interface.states import AgentInputState, AgentOutputState
 from src.utils.tools import get_today_str
 from langchain_core.messages import HumanMessage, AIMessage
-from src.llm.gemini_client import create_gemini_model
+from src.llm.gemini_client import create_model
 from src.prompt_engineering.templates import get_prompt
 from src.agents.supervisor_agent import supervisor, supervisor_tools
 from src.agents.scope_agent import clarify_with_user, write_research_brief
@@ -9,10 +9,11 @@ from langgraph.graph import StateGraph, START, END
 from langsmith import traceable
 from psycopg_pool import AsyncConnectionPool
 import os
-
+from dotenv import load_dotenv
+load_dotenv()
 raw_url = os.getenv("ASYNC_DATABASE_URL")
 DATABASE_URL = raw_url.replace("+asyncpg", "")
-model = create_gemini_model("final_reporter")
+model = create_model("final_reporter")
 final_report_generation_prompt = get_prompt("final_reporter", "final_report_generation_prompt")
 
 @traceable

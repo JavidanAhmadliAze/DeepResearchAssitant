@@ -21,9 +21,8 @@ async def run_agent_workflow(chat_id: str, user_query: str, user_id: uuid.UUID):
         try:
             async with connection_pool.connection() as conn:
                 checkpointer = AsyncPostgresSaver(conn)
-                # No need to run setup() every time, but it's safe if you do
 
-                # Use the global builder to compile the agent
+                # Using the global builder to compile the agent
                 agent = deep_researcher_builder.compile(checkpointer=checkpointer)
 
                 config = {"configurable": {
@@ -85,7 +84,7 @@ async def run_agent_workflow(chat_id: str, user_query: str, user_id: uuid.UUID):
                 )
                 await db.execute(stmt_complete)
                 await db.commit()
-                print(f"✅ Research completed for thread: {thread_id}", flush=True)
+                print(f"Research completed for thread: {thread_id}", flush=True)
 
         except Exception as e:
             logger.error(f"Workflow error: {e}")

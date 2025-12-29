@@ -3,15 +3,17 @@ from src.agent_interface.schemas import Summary
 from src.prompt_engineering.templates import get_prompt
 from typing_extensions import Literal, List, Annotated
 from tavily import TavilyClient
-from src.llm.gemini_client import create_gemini_model
+from src.llm.gemini_client import create_model
 from langchain_core.messages import HumanMessage
 from datetime import datetime
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 summarize_webpage_prompt = get_prompt("utils","summarize_webpage_prompt")
-model = create_gemini_model("summarizer")
+model = create_model("summarizer")
 tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 
 def get_today_str() -> str:
