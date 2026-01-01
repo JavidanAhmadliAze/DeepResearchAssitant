@@ -32,9 +32,9 @@ The workflow is governed by a persistent state machine through four strategic ph
 FastAPI serves as the robust communication layer between the user interface and the autonomous background agents. It utilizes an **Asynchronous Request-Response Pattern** to ensure that long-running research tasks do not block the web server.
 
 1. **The Asynchronous Polling Pattern**
-    Deep research can take minutes to complete. To provide a smooth user experience, the system implements the 202 Accepted pattern:
+    Deep research can take minutes to complete. To provide a smooth user experience, the system implements the **202 Accepted** pattern:
 
-**Task Initiation**: When a research request is sent, FastAPI validates the input and immediately returns an HTTP 202 Accepted status with a chat_id.
+**Task Initiation**: When a research request is sent, FastAPI validates the input and immediately returns an `HTTP 202 Accepted` status with a chat_id.
 
 **Background Execution**: The `BackgroundTasks` module triggers the LangGraph workflow in a non-blocking thread, allowing the API to remain responsive to other users.
 
