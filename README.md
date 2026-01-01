@@ -3,6 +3,15 @@ Transforming ambiguous queries into verified, executive-grade research reports t
 ## 🧐 Executive Summary
 TDeepResearcher is a high-performance autonomous system designed to bridge the gap between simple RAG (Retrieval-Augmented Generation) and deep, iterative analysis. By leveraging a multi-agent orchestration layer, the system self-corrects, reflects on data quality, and scales its research effort dynamically to deliver high-fidelity, standardized English reports.
 ## 🛠️ Technology Stack
+| Layer | Component | Description |
+|------|-----------|-------------|
+| Orchestration | LangGraph | Multi-agent state management with recursive reasoning loops and multi-model routing. |
+| Core Reasoning | DeepSeek-V3 | Primary reasoning engine optimized for strategic planning and logical chain-of-thought analysis. |
+| Multimodal & Speed | Gemini 1.5 Flash | Utilized for high-speed context processing, large-scale embeddings, and rapid data extraction. |
+| Refinement | OpenAI GPT-4o | Specialized agent for final report polishing, critique, and structural verification. |
+| API Backend | FastAPI | Asynchronous gateway managing background workers and long-polling research states. |
+| Knowledge Base | ChromaDB | Vector persistence layer for RAG and long-term memory across research cycles. |
+| Memory State | PostgreSQL | Transactional storage for persistent agent checkpoints, ensuring 100% resilience. |
 
 
 ## 🧠 Agentic Reasoning Framework
