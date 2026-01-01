@@ -27,9 +27,9 @@ FastAPI serves as the robust communication layer between the user interface and 
 
 **Task Initiation**: When a research request is sent, FastAPI validates the input and immediately returns an HTTP 202 Accepted status with a chat_id.
 
-**Background Execution**: The BackgroundTasks module triggers the LangGraph workflow in a non-blocking thread, allowing the API to remain responsive to other users.
+**Background Execution**: The `BackgroundTasks` module triggers the LangGraph workflow in a non-blocking thread, allowing the API to remain responsive to other users.
 
-**State Polling**: The frontend client polls a GET /chat/{chat_id} endpoint. FastAPI retrieves the latest "checkpoints" from the PostgreSQL database, providing real-time updates on the agent's current "thought" or "action."
+**State Polling**: The frontend client polls a GET /chat/{chat_id} endpoint. FastAPI retrieves the latest "checkpoints" from the PostgreSQL database, providing real-time updates on the agent's current "thought" or "action." 
 
 2. **Dependency Injection & Lifespan Management**
     The backend utilizes FastAPI’s Dependency Injection system to manage database sessions and LLM clients efficiently.
