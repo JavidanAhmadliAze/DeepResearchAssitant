@@ -20,7 +20,7 @@ class AgentOutputState(MessagesState):
     """
 
     research_brief: Optional[str]
-    supervisor_message: Annotated[Sequence[BaseMessage], add_messages]
+    supervisor_messages: Annotated[Sequence[BaseMessage], add_messages]
     raw_notes: Annotated[[List[str]], operator.add]
     notes: Annotated[[List[str]], operator.add]
     trigger_search: bool
@@ -39,13 +39,13 @@ class SupervisorState(TypedDict):
     # Detailed research brief that guides the overall research direction
     research_brief: str
     # Processed and structured notes ready for final report generation
-    notes: Annotated[list[str], operator.add]
+    notes: Annotated[list[str], operator.add] = []
     # Counter tracking the number of research iterations performed
-    research_iterations: int
+    research_iterations: int = 0
     # Raw unprocessed research notes collected from sub-agent research
-    raw_notes: Annotated[list[str], operator.add]
+    raw_notes: Annotated[list[str], operator.add] = []
     # Lets us know if we need to retrieve data from db
-    trigger_search: bool
+    trigger_search: bool = True
 
 class ResearcherState(TypedDict):
     """

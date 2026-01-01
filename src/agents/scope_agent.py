@@ -9,6 +9,7 @@ from src.llm.gemini_client import create_model
 from langsmith import traceable
 from src.prompt_engineering.templates import get_prompt
 from src.utils.tools import get_today_str
+from langgraph.checkpoint.memory import InMemorySaver
 
 
 load_dotenv()
@@ -54,3 +55,14 @@ async def write_research_brief(state: AgentOutputState):
 
     return {"research_brief": result.research_brief,
             "supervisor_messages": [HumanMessage(content=f"{result.research_brief}.")]}
+
+scope_graph = StateGraph(AgentInputState,output_schema=AgentOutputState)
+
+scope_graph.add_node("clarify_with_user", clarify_with_user)
+scope_graph.add_node("write_research_brief", write_research_brief)
+
+scope_graph.add_edge(START,"clarify_with_user")
+scope_graph.add_edge("write_research_brief", END)
+
+
+

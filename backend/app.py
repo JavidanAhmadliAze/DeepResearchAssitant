@@ -13,29 +13,29 @@ from backend.db import create_db_and_tables
 from src.agents.workflow_executor import connection_pool
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Create standard SQLAlchemy tables (Users, Tasks, etc.)
+    # --- 1. OPEN THE CONNECTION POOL ---
+    # This removes the Deprecation Warning and ensures routes can connect
+    await connection_pool.open()
+
+    # --- 2. SETUP STANDARD TABLES ---
     await create_db_and_tables()
 
-    # 2. Setup LangGraph Checkpointer tables (checkpoints, writes)
-    # We open a connection from the pool specifically for setup
+    # --- 3. SETUP LANGGRAPH TABLES ---
     async with connection_pool.connection() as conn:
-        # Crucial: This avoids the "CREATE INDEX CONCURRENTLY" error
+        # LangGraph setup requires autocommit for index creation
         await conn.set_autocommit(True)
-
         checkpointer = AsyncPostgresSaver(conn)
         await checkpointer.setup()
-
-        print("✅ LangGraph checkpoint tables are ready.")
-
-        # Set it back to False for safety if the pool is reused
         await conn.set_autocommit(False)
+        print("✅ Database and LangGraph tables are fully initialized.")
 
     yield
-    # Cleanup logic (if needed) goes here
 
+    # --- 4. CLOSE THE POOL ---
+    # Ensures no hanging connections when the server restarts
+    await connection_pool.close()
 app = FastAPI(lifespan=lifespan)
 
 

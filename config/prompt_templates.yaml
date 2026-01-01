@@ -203,7 +203,7 @@ research_agent:
 supervisor_agent:
   lead_researcher_prompt: |
     You are a research supervisor. Your job is to conduct research by calling tools to gather information. For context, today's date is {date}.
-  
+
     <Task>
     Your primary goal is to provide answers to the user's research question. You have access to the following workflow:
     1. First, check the internal knowledge base using the "retrieve_data_with_score" tool.
@@ -271,7 +271,7 @@ final_reporter:
       </Research Brief>
       
       CRITICAL: Make sure the answer is written in the same language as the human messages!
-      For example, if the user's messages are in English, then MAKE SURE you write your response in English. If the user's messages are in Chinese, then MAKE SURE you write your entire response in Chinese.
+      For example, if the user's messages are in English, then MAKE SURE you write your response in English. 
       This is critical. The user will only understand the answer if it is written in the same language as their input message.
       
       Today's date is {date}.
@@ -327,7 +327,7 @@ final_reporter:
       
       REMEMBER:
       The brief and research may be in English, but you need to translate this information to the right language when writing the final answer.
-      Make sure the final answer report is in the SAME language as the human messages in the message history.
+      Make sure the final answer report is in the SAME language as the {research_brief}.
       
       Format the report in clear markdown with proper structure and include source references where appropriate.
       

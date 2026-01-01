@@ -8,7 +8,7 @@ from src.data_retriever.output_retriever import retrieve_data_with_score
 from langgraph.graph import StateGraph, START, END
 from langchain_core.runnables import RunnableConfig
 import asyncio
-
+from langgraph.checkpoint.memory import InMemorySaver
 from typing_extensions import Literal
 from src.llm.gemini_client import create_model
 from src.prompt_engineering.templates import get_prompt
@@ -46,7 +46,7 @@ def get_notes_from_tool_calls(messages: list[BaseMessage]) -> list[str]:
 from langsmith import traceable
 
 @traceable
-async def supervisor(state: SupervisorState, config: RunnableConfig) ->  Command[Literal["supervisor_tools"]]:
+async def supervisor(state: SupervisorState) ->  Command[Literal["supervisor_tools"]]:
     """Coordinate research activities.
 
        Analyzes the research brief and current progress to decide:
@@ -60,18 +60,18 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) ->  Command
        Returns:
            Command to proceed to supervisor_tools node with updated state
        """
-
     supervisor_messages = state.get("supervisor_messages",[])
+
     print(supervisor_messages)
     system_message = lead_researcher_prompt.format(
         date=get_today_str(),
         max_researcher_iterations=max_researcher_iterations,
-        max_concurrent_research_units=max_concurrent_researchers_unit  # match the template
+        max_concurrent_research_units=max_concurrent_researchers_unit,
     )
 
     messages = [SystemMessage(content=system_message)] + supervisor_messages
 
-    response = await model_with_tools.ainvoke(messages, config=config)
+    response = await model_with_tools.ainvoke(messages)
 
     return Command(
         goto="supervisor_tools",
@@ -154,7 +154,8 @@ async def supervisor_tools(state: SupervisorState) -> Command[Literal["superviso
                     research_agent.ainvoke({
                         "researcher_messages": [HumanMessage(content=tool_call["args"]["research_topic"])],
                         "research_topic": tool_call["args"]["research_topic"]
-                    })
+                    },config={"configurable": {"thread_id": "1"},
+                        "recursion_limit" : 50})
                     for tool_call in conduct_research_calls
                 ]
 
@@ -200,4 +201,12 @@ async def supervisor_tools(state: SupervisorState) -> Command[Literal["superviso
             }
         )
 
+checkpoint = InMemorySaver()
+
+supervisor_builder = StateGraph(SupervisorState)
+supervisor_builder.add_node("supervisor", supervisor)
+supervisor_builder.add_node("supervisor_tools", supervisor_tools)
+supervisor_builder.add_edge(START, "supervisor")
+
+supervisor_agent = supervisor_builder.compile(checkpointer=checkpoint)
 

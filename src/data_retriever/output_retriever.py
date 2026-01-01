@@ -2,14 +2,16 @@ from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from dotenv import load_dotenv
 from langchain.tools import tool
+import os
+from pathlib import Path
 
 load_dotenv()
 embedding = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
-
+VECTOR_DB_PATH = str(Path(r"C:\Users\User\PythonProject\data\output").resolve())
 vector_store = Chroma(
     collection_name="deep_research_texts",
     embedding_function=embedding,
-    persist_directory=r"C:\Users\User\team_8\team_8\agentic_core\cognition\memory",
+    persist_directory=VECTOR_DB_PATH,
     collection_metadata={"hnsw:space": "cosine"}
 )
 @tool
