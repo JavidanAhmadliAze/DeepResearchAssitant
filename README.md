@@ -59,6 +59,42 @@ curl -X POST "http://localhost:8000/chat" \
 curl -X GET "http://localhost:8000/chat/550e8400-e29b-41d4-a716-446655440000"
 ```
 
+## 🎨 Frontend Architecture: Real-time Agentic UI
+The frontend is a **Streamlit-based reactive dashboard** designed to visualize the internal "thought process" of the multi-agent system.
+
+**Key Features**
+-**Stateful Session Management**: Users can leave and return to research tasks via unique thread_id URL routing.
+
+-**Dynamic Thought Stream**: Uses the FastAPI polling mechanism to display real-time logs of which agent (Supervisor, Researcher, or Critic) is currently active.
+
+-**Markdown Rendering**: Automatically formats the final "Executive Report" with tables, bolding, and citations for immediate readability.
+
+-**Intervention UI**: A dedicated interface for the Interactive Scoping (HITL) phase, allowing users to approve or modify the research brief before the heavy computation begins.
+
+<img width="1882" height="831" alt="image" src="https://github.com/user-attachments/assets/5ffc29e1-2515-49eb-86ee-e30a38cc007b" />
+
+
+## 🧪 Observability & Evaluation (LLM-Ops)
+
+To ensure the reliability of autonomous reasoning, the system integrates with industry-standard evaluation frameworks to track latency, cost, and output quality.
+
+1. **LangSmith**: Traceability & Debugging
+We use LangSmith to visualize the complex DAG (Directed Acyclic Graph) produced by LangGraph.
+
+    - **Trace Monitoring**: Every "turn" in the agentic loop is recorded, allowing us to identify where an agent might be getting stuck in a logic loop.
+
+    - **Cost Tracking**: Real-time monitoring of token usage across DeepSeek, OpenAI, and Gemini models.
+
+2. **Langfuse: Quality Benchmarking**
+The evaluation strategy focuses on three core metrics:
+
+    - **Faithfulness**: Ensuring the final report is grounded strictly in the retrieved documents (preventing hallucinations).
+
+    - **Relevancy**: Measuring how well the research brief actually answers the user's initial ambiguous query.
+
+    - **Multi-Agent Latency**: Analyzing the "Time to First Insight" vs. "Time to Final Synthesis."
+ 
+
 ## 🚀 Deployment & Configuration
 
  **Containerized Orchestration**
