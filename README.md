@@ -1,7 +1,7 @@
 # 🔎 DeepResearcher: Autonomous Multi-Agent Intelligence
 Transforming ambiguous queries into verified, executive-grade research reports through stateful agentic workflows.
 ## 🧐 Executive Summary
-TDeepResearcher is a high-performance autonomous system designed to bridge the gap between simple RAG (Retrieval-Augmented Generation) and deep, iterative analysis. By leveraging a multi-agent orchestration layer, the system self-corrects, reflects on data quality, and scales its research effort dynamically to deliver high-fidelity, standardized English reports.
+DeepResearcher is a high-performance autonomous system designed to bridge the gap between simple RAG (Retrieval-Augmented Generation) and deep, iterative analysis. By leveraging a multi-agent orchestration layer, the system self-corrects, reflects on data quality, and scales its research effort dynamically to deliver high-fidelity, standardized English reports.
 ## 🛠️ Technology Stack
 | Layer | Component | Description |
 |------|-----------|-------------|
