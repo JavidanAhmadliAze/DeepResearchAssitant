@@ -1,8 +1,17 @@
 # 🔎 DeepResearcher: Autonomous Multi-Agent Intelligence
 Transforming ambiguous queries into verified, executive-grade research reports through stateful agentic workflows.
 ## 🧐 Executive Summary
-TDeepResearcher is a high-performance autonomous system designed to bridge the gap between simple RAG (Retrieval-Augmented Generation) and deep, iterative analysis. By leveraging a multi-agent orchestration layer, the system self-corrects, reflects on data quality, and scales its research effort dynamically to deliver high-fidelity, standardized English reports.
+DeepResearcher is a high-performance autonomous system designed to bridge the gap between simple RAG (Retrieval-Augmented Generation) and deep, iterative analysis. By leveraging a multi-agent orchestration layer, the system self-corrects, reflects on data quality, and scales its research effort dynamically to deliver high-fidelity, standardized English reports.
 ## 🛠️ Technology Stack
+| Layer | Component | Description |
+|------|-----------|-------------|
+| Orchestration | LangGraph | Multi-agent state management with recursive reasoning loops and multi-model routing. |
+| Core Reasoning | DeepSeek-V3 | Primary reasoning engine optimized for strategic planning and logical chain-of-thought analysis. |
+| Multimodal & Speed | Gemini 1.5 Flash | Utilized for high-speed context processing, large-scale embeddings, and rapid data extraction. |
+| Refinement | OpenAI GPT-4o | Specialized agent for final report polishing, critique, and structural verification. |
+| API Backend | FastAPI | Asynchronous gateway managing background workers and long-polling research states. |
+| Knowledge Base | ChromaDB | Vector persistence layer for RAG and long-term memory across research cycles. |
+| Memory State | PostgreSQL | Transactional storage for persistent agent checkpoints, ensuring 100% resilience. |
 
 
 ## 🧠 Agentic Reasoning Framework
@@ -23,9 +32,9 @@ The workflow is governed by a persistent state machine through four strategic ph
 FastAPI serves as the robust communication layer between the user interface and the autonomous background agents. It utilizes an **Asynchronous Request-Response Pattern** to ensure that long-running research tasks do not block the web server.
 
 1. **The Asynchronous Polling Pattern**
-    Deep research can take minutes to complete. To provide a smooth user experience, the system implements the 202 Accepted pattern:
+    Deep research can take minutes to complete. To provide a smooth user experience, the system implements the **202 Accepted** pattern:
 
-**Task Initiation**: When a research request is sent, FastAPI validates the input and immediately returns an HTTP 202 Accepted status with a chat_id.
+**Task Initiation**: When a research request is sent, FastAPI validates the input and immediately returns an `HTTP 202 Accepted` status with a chat_id.
 
 **Background Execution**: The `BackgroundTasks` module triggers the LangGraph workflow in a non-blocking thread, allowing the API to remain responsive to other users.
 
@@ -49,6 +58,42 @@ curl -X POST "http://localhost:8000/chat" \
 # Poll for results
 curl -X GET "http://localhost:8000/chat/550e8400-e29b-41d4-a716-446655440000"
 ```
+
+## 🎨 Frontend Architecture: Real-time Agentic UI
+The frontend is a **Streamlit-based reactive dashboard** designed to visualize the internal "thought process" of the multi-agent system.
+
+**Key Features**
+-**Stateful Session Management**: Users can leave and return to research tasks via unique thread_id URL routing.
+
+-**Dynamic Thought Stream**: Uses the FastAPI polling mechanism to display real-time logs of which agent (Supervisor, Researcher, or Critic) is currently active.
+
+-**Markdown Rendering**: Automatically formats the final "Executive Report" with tables, bolding, and citations for immediate readability.
+
+-**Intervention UI**: A dedicated interface for the Interactive Scoping (HITL) phase, allowing users to approve or modify the research brief before the heavy computation begins.
+
+<img width="1882" height="831" alt="image" src="https://github.com/user-attachments/assets/5ffc29e1-2515-49eb-86ee-e30a38cc007b" />
+
+
+## 🧪 Observability & Evaluation (LLM-Ops)
+
+To ensure the reliability of autonomous reasoning, the system integrates with industry-standard evaluation frameworks to track latency, cost, and output quality.
+
+1. **LangSmith**: Traceability & Debugging
+We use LangSmith to visualize the complex DAG (Directed Acyclic Graph) produced by LangGraph.
+
+    - **Trace Monitoring**: Every "turn" in the agentic loop is recorded, allowing us to identify where an agent might be getting stuck in a logic loop.
+
+    - **Cost Tracking**: Real-time monitoring of token usage across DeepSeek, OpenAI, and Gemini models.
+
+2. **Langfuse: Quality Benchmarking**
+The evaluation strategy focuses on three core metrics:
+
+    - **Faithfulness**: Ensuring the final report is grounded strictly in the retrieved documents (preventing hallucinations).
+
+    - **Relevancy**: Measuring how well the research brief actually answers the user's initial ambiguous query.
+
+    - **Multi-Agent Latency**: Analyzing the "Time to First Insight" vs. "Time to Final Synthesis."
+ 
 
 ## 🚀 Deployment & Configuration
 
